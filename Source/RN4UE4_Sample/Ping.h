@@ -2,6 +2,14 @@
 
 #pragma once
 
+#include "RakNetTypes.h"
+#include "RakPeerInterface.h"
+#include "GetTime.h"
+#include "BitStream.h"
+#include "MessageIdentifiers.h"
+#include "Gets.h"
+
+
 #include "GameFramework/Actor.h"
 #include "Ping.generated.h"
 
@@ -31,5 +39,16 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "RakNet")
 	void ClientPing();
-	
+
+
+private:
+
+	RakNet::RakPeerInterface* server;
+	RakNet::RakPeerInterface* client;
+
+	// Holds packets
+	RakNet::Packet* p;
+
+	bool waitReceivedData = false;
+
 };

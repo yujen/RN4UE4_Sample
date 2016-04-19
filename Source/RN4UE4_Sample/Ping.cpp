@@ -6,12 +6,7 @@
 
 #include "IRakNet.h"
 
-#include "RakNetTypes.h"
-#include "RakPeerInterface.h"
-#include "GetTime.h"
-#include "BitStream.h"
-#include "MessageIdentifiers.h"
-#include "Gets.h"
+
 
 #include "Ping.h"
 
@@ -40,11 +35,69 @@ void APing::Tick( float DeltaTime )
 {
 	Super::Tick( DeltaTime );
 
+	if (waitReceivedData == false)
+	{
+		return;
+	}
+
+
+	p = client->Receive();
+	if (p == 0)
+	{
+		UE_LOG(RN4UE4Sample, Log, TEXT("waiting data..."));
+		return;
+	}
+
+	waitReceivedData = false;
+
+	// Check if this is a network message packet
+	switch (p->data[0])
+	{
+	case ID_UNCONNECTED_PONG:
+	{
+		unsigned int dataLength;
+		RakNet::TimeMS time;
+		RakNet::BitStream bsIn(p->data, p->length, false);
+		bsIn.IgnoreBytes(1);
+		bsIn.Read(time);
+		dataLength = p->length - sizeof(unsigned char) - sizeof(RakNet::TimeMS);
+
+		FString sysAddress = FString(p->systemAddress.ToString(true));
+		UE_LOG(RN4UE4Sample, Log, TEXT("ID_UNCONNECTED_PONG from SystemAddress %s."), *sysAddress);
+		UE_LOG(RN4UE4Sample, Log, TEXT("Time is %i"), time);
+		UE_LOG(RN4UE4Sample, Log, TEXT("Data is %i bytes long"), dataLength);
+
+
+		if (dataLength > 0)
+		{
+			char* charData = (char*)(p->data + sizeof(unsigned char) + sizeof(RakNet::TimeMS));
+			FString strData = FString(UTF8_TO_TCHAR(charData));
+			UE_LOG(RN4UE4Sample, Log, TEXT("String is %s, length is %d "), *strData, strlen(charData));
+
+		}
+
+		// In this sample since the client is not running a game we can save CPU cycles by
+		// Stopping the network threads after receiving the pong.
+		client->Shutdown(100);
+	}
+	break;
+	case ID_UNCONNECTED_PING:
+		break;
+	case ID_UNCONNECTED_PING_OPEN_CONNECTIONS:
+		break;
+	}
+
+	client->DeallocatePacket(p);
+
+	RakNet::RakPeerInterface::DestroyInstance(server);
+	RakNet::RakPeerInterface::DestroyInstance(client);
+	UE_LOG(RN4UE4Sample, Log, TEXT("client finished."));
+
 }
 
 void APing::StartServer(FString responseString)
 {
-	RakNet::RakPeerInterface* server = RakNet::RakPeerInterface::GetInstance();
+	server = RakNet::RakPeerInterface::GetInstance();
 	int i = server->GetNumberOfAddresses();
 
 	char* charString = TCHAR_TO_UTF8(*responseString);
@@ -63,78 +116,22 @@ void APing::StartServer(FString responseString)
 	if (b)
 	{
 		UE_LOG(RN4UE4Sample, Log, TEXT("Server started, waiting for connections."));
-		
 	}
-	
-	//TestStr testStr;
-	//UE_LOG(RN4UE4Sample, Log, TEXT("Server started, waiting for connections.  %d"), testStr.testfunc());
-	//RakNet::TestClass<int>* tc = new RakNet::TestClass<int>();
-	//UE_LOG(RN4UE4Sample, Log, TEXT("Server started, waiting for connections.  %d"), tc->testClass());
+	else
+	{
+		UE_LOG(RN4UE4Sample, Log, TEXT("Server start failed!"));
+	}
 }
 
 void APing::ClientPing()
 {
 	UE_LOG(RN4UE4Sample, Log, TEXT("OnRakNetPingClient"));
-	RakNet::RakPeerInterface *client = RakNet::RakPeerInterface::GetInstance();
 
-	// Holds packets
-	RakNet::Packet* p;
-
-
+	client = RakNet::RakPeerInterface::GetInstance();
 	RakNet::SocketDescriptor socketDescriptor(0, 0);
 	client->Startup(1, &socketDescriptor, 1);
 	client->Ping("127.0.0.1", 60000, false);
 
-	while (true)
-	{
-		p = client->Receive();
-		if (p == 0)
-		{
-			continue;
-		}
-
-		// Check if this is a network message packet
-		switch (p->data[0])
-		{
-		case ID_UNCONNECTED_PONG:
-		{
-			unsigned int dataLength;
-			RakNet::TimeMS time;
-			RakNet::BitStream bsIn(p->data, p->length, false);
-			bsIn.IgnoreBytes(1);
-			bsIn.Read(time);
-			dataLength = p->length - sizeof(unsigned char) - sizeof(RakNet::TimeMS);
-
-			FString sysAddress = FString(p->systemAddress.ToString(true));
-			UE_LOG(RN4UE4Sample, Log, TEXT("ID_UNCONNECTED_PONG from SystemAddress %s."), *sysAddress);
-			UE_LOG(RN4UE4Sample, Log, TEXT("Time is %i"), time);
-			UE_LOG(RN4UE4Sample, Log, TEXT("Data is %i bytes long"), dataLength);
-
-
-			if (dataLength > 0)
-			{
-				char* charData = (char*)(p->data + sizeof(unsigned char) + sizeof(RakNet::TimeMS));
-				FString strData = FString(UTF8_TO_TCHAR(charData));
-				UE_LOG(RN4UE4Sample, Log, TEXT("String is %s, length is %d "), *strData, strlen(charData));
-
-			}
-			
-			// In this sample since the client is not running a game we can save CPU cycles by
-			// Stopping the network threads after receiving the pong.
-			client->Shutdown(100);
-		}
-		break;
-		case ID_UNCONNECTED_PING:
-			break;
-		case ID_UNCONNECTED_PING_OPEN_CONNECTIONS:
-			break;
-		}
-
-		client->DeallocatePacket(p);
-		break;
-	}
-
-	RakNet::RakPeerInterface::DestroyInstance(client);
-	UE_LOG(RN4UE4Sample, Log, TEXT("client finished."));
+	waitReceivedData = true;
 	
 }
