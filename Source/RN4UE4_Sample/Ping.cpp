@@ -78,7 +78,7 @@ void APing::Tick( float DeltaTime )
 
 		// In this sample since the client is not running a game we can save CPU cycles by
 		// Stopping the network threads after receiving the pong.
-		client->Shutdown(100);
+		//client->Shutdown(100);
 	}
 	break;
 	case ID_UNCONNECTED_PING:
